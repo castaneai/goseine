@@ -1,0 +1,66 @@
+package goseine
+
+import (
+	"net"
+	"github.com/sirupsen/logrus"
+)
+
+type ActualAddrResolver func() (*net.TCPAddr, error)
+
+type Server struct {
+	listenAddr *net.TCPAddr
+	actualResolver ActualAddrResolver
+	log *logrus.Logger
+}
+
+func (s *Server) Serve() error {
+	lt, err := net.ListenTCP("tcp", s.listenAddr)
+	if err != nil {
+		return err
+	}
+	defer lt.Close()
+
+	s.log.Infof("Listening on %s\n", s.listenAddr)
+	for {
+		conn, err := lt.AcceptTCP()
+		if err != nil {
+			return err
+		}
+		c, err := NewClient(conn)
+		if err != nil {
+			return err
+		}
+		go s.handleConn(c)
+	}
+}
+
+func (s *Server) handleConn(c *Client) {
+	defer c.Close()
+
+	s.log.Infof("Handle new client: %s\n", c.conn.RemoteAddr().String())
+
+	actual, err := s.actualResolver()
+	if err != nil {
+		s.log.Errorln(err)
+		return
+	}
+
+	p, err := NewProxy(c.conn, c.conn.RemoteAddr().(*net.TCPAddr), actual)
+	p.Start()
+}
+
+type LoginServer struct {
+	server *Server
+}
+
+func NewLoginServer(listenAddr, actualAddr *net.TCPAddr) (*LoginServer, error) {
+	log := NewLogger("LoginServer")
+	srv := &LoginServer{
+		server: &Server{
+			listenAddr: listenAddr,
+			actualResolver: func() (*net.TCPAddr, error) { return actualAddr, nil },
+			log: log,
+		},
+	}
+	return srv, nil
+}

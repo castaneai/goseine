@@ -1,0 +1,21 @@
+package goseine
+
+import (
+	"github.com/sirupsen/logrus"
+	"fmt"
+)
+
+type LogFormatter struct {
+	category string
+}
+
+func NewLogger(category string) *logrus.Logger {
+	logger := logrus.New()
+	logger.Formatter = &LogFormatter{category: category}
+	return logger
+}
+
+func (f *LogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	return []byte(fmt.Sprintf("[%s][%s]%s",
+		entry.Time.Format("2006/01/02 15:04:05.00000"), f.category, entry.Message)), nil
+}
