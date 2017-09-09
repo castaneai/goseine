@@ -26,18 +26,14 @@ func (s *Server) Serve() error {
 		if err != nil {
 			return err
 		}
-		c, err := NewClient(conn)
-		if err != nil {
-			return err
-		}
-		go s.handleConn(c)
+		go s.handleConn(conn)
 	}
 }
 
-func (s *Server) handleConn(c *Client) {
+func (s *Server) handleConn(c *net.TCPConn) {
 	defer c.Close()
 
-	s.log.Infof("Handle new client: %s\n", c.conn.RemoteAddr().String())
+	s.log.Infof("Handle new client: %s\n", c.RemoteAddr().String())
 
 	actual, err := s.actualResolver()
 	if err != nil {
@@ -45,9 +41,12 @@ func (s *Server) handleConn(c *Client) {
 		return
 	}
 
-	p, err := NewProxy(c.conn, c.conn.RemoteAddr().(*net.TCPAddr), actual)
+	p, err := NewProxy(c, c.RemoteAddr().(*net.TCPAddr), actual)
 
-	f := &GoseinePacketFilter{log: NewLogger("Filter")}
+	f := &GoseinePacketFilter{
+		cipher: NewCipher([]byte("qmfaktnpgjs")),
+		log: NewLogger("Filter"),
+	}
 	p.SetFilter(f)
 	p.Start()
 }
