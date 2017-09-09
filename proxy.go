@@ -9,9 +9,14 @@ const (
 	BUFFER_SIZE = 0xFFFF
 )
 
+type ProxyFilter interface {
+	Filter(data []byte, src, dst *net.TCPAddr)
+}
+
 type Proxy struct {
 	laddr, raddr *net.TCPAddr
 	lconn, rconn io.ReadWriteCloser
+	filter ProxyFilter
 
 	stopCh chan bool
 }
@@ -24,6 +29,10 @@ func NewProxy(lconn *net.TCPConn, laddr, raddr *net.TCPAddr) (*Proxy, error) {
 	}, nil
 }
 
+func (p *Proxy) SetFilter(filter ProxyFilter) {
+	p.filter = filter
+}
+
 func (p *Proxy) Start() error {
 	defer p.lconn.Close()
 
@@ -34,15 +43,15 @@ func (p *Proxy) Start() error {
 	}
 	defer p.rconn.Close()
 
-	go p.pipe(p.lconn, p.rconn)
-	go p.pipe(p.rconn, p.lconn)
+	go p.pipe(p.lconn, p.rconn, p.laddr, p.raddr)
+	go p.pipe(p.rconn, p.lconn, p.raddr, p.laddr)
 
 	// wait for stop
 	<- p.stopCh
 	return nil
 }
 
-func (p *Proxy) pipe(src, dst io.ReadWriter) {
+func (p *Proxy) pipe(src, dst io.ReadWriter, sAddr, dAddr *net.TCPAddr) {
 	buff := make([]byte, BUFFER_SIZE)
 	for {
 		n, err := src.Read(buff)
@@ -52,7 +61,9 @@ func (p *Proxy) pipe(src, dst io.ReadWriter) {
 		}
 		b := buff[:n]
 
-		// TODO: filter
+		if p.filter != nil {
+			p.filter.Filter(b, sAddr, dAddr)
+		}
 
 		n, err = dst.Write(b)
 		if err != nil {

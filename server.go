@@ -46,6 +46,9 @@ func (s *Server) handleConn(c *Client) {
 	}
 
 	p, err := NewProxy(c.conn, c.conn.RemoteAddr().(*net.TCPAddr), actual)
+
+	f := &GoseinePacketFilter{log: NewLogger("Filter")}
+	p.SetFilter(f)
 	p.Start()
 }
 
@@ -63,4 +66,13 @@ func NewLoginServer(listenAddr, actualAddr *net.TCPAddr) (*LoginServer, error) {
 		},
 	}
 	return srv, nil
+}
+
+func Start(listenAddr, actualLoginAddr *net.TCPAddr) error {
+	s, err := NewLoginServer(listenAddr, actualLoginAddr)
+	if err != nil {
+		return err
+	}
+	s.server.Serve()
+	return nil
 }
