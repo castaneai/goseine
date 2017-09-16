@@ -16,6 +16,6 @@ func NewLogger(category string) *logrus.Logger {
 }
 
 func (f *LogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-	return []byte(fmt.Sprintf("[%s][%s]%s",
-		entry.Time.Format("2006/01/02 15:04:05.00000"), f.category, entry.Message)), nil
+	return []byte(fmt.Sprintf("[%s][%s][%s]%s",
+		entry.Time.Format("2006/01/02 15:04:05.00000"), entry.Level, f.category, entry.Message)), nil
 }

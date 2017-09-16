@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"net"
 	"fmt"
 	"github.com/castaneai/goseine"
@@ -12,7 +13,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	actual, err := net.ResolveTCPAddr("tcp", "157.7.172.197:10000")
+	actual, err := net.ResolveTCPAddr("tcp", os.Getenv("GOSEINE_ACTUAL_LOGIN_SERVER"))
 	if err != nil {
 		fmt.Println(err)
 		return
