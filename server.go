@@ -30,25 +30,25 @@ func (s *Server) Serve() error {
 	}
 }
 
-func (s *Server) handleConn(c *net.TCPConn) {
-	defer c.Close()
+func (s *Server) handleConn(c *net.TCPConn) error {
+	defer (func() {
+		c.Close()
+		s.log.Infof("Closed client: %s\n", c.RemoteAddr().String())
+	})()
 
 	s.log.Infof("Handle new client: %s\n", c.RemoteAddr().String())
 
 	actual, err := s.actualResolver()
 	if err != nil {
 		s.log.Errorln(err)
-		return
+		return err
 	}
 
 	p, err := NewProxy(c, c.RemoteAddr().(*net.TCPAddr), actual)
-
-	f := &GoseinePacketFilter{
-		cipher: NewCipher([]byte("qmfaktnpgjs")),
-		log: NewLogger("Filter"),
-	}
+	f := NewPacketFilter()
 	p.SetFilter(f)
-	p.Start()
+
+	return p.Start()
 }
 
 type LoginServer struct {
@@ -72,6 +72,5 @@ func Start(listenAddr, actualLoginAddr *net.TCPAddr) error {
 	if err != nil {
 		return err
 	}
-	s.server.Serve()
-	return nil
+	return s.server.Serve()
 }
