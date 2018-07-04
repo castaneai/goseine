@@ -1,16 +1,16 @@
 package goseine
 
 import (
-	"net"
 	"github.com/sirupsen/logrus"
+	"net"
 )
 
 type ActualAddrResolver func() (*net.TCPAddr, error)
 
 type Server struct {
-	listenAddr *net.TCPAddr
+	listenAddr     *net.TCPAddr
 	actualResolver ActualAddrResolver
-	log *logrus.Logger
+	log            *logrus.Logger
 }
 
 func (s *Server) Serve() error {
@@ -45,8 +45,8 @@ func (s *Server) handleConn(c *net.TCPConn) error {
 	}
 
 	p, err := NewProxy(c, c.RemoteAddr().(*net.TCPAddr), actual)
-	f := NewPacketFilter()
-	p.SetFilter(f)
+	// f := NewPacketFilter()
+	// p.SetFilter(f)
 
 	return p.Start()
 }
@@ -59,9 +59,9 @@ func NewLoginServer(listenAddr, actualAddr *net.TCPAddr) (*LoginServer, error) {
 	log := NewLogger("LoginServer")
 	srv := &LoginServer{
 		server: &Server{
-			listenAddr: listenAddr,
+			listenAddr:     listenAddr,
 			actualResolver: func() (*net.TCPAddr, error) { return actualAddr, nil },
-			log: log,
+			log:            log,
 		},
 	}
 	return srv, nil
