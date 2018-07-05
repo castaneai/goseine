@@ -2,6 +2,7 @@ package goseine
 
 import (
 	"bytes"
+	"github.com/sirupsen/logrus"
 	"reflect"
 	"testing"
 )
@@ -38,4 +39,14 @@ func TestPacketDecoder(t *testing.T) {
 	if !reflect.DeepEqual(expectedPayload, p.Payload) {
 		t.Fatalf("expected: %#+v, but actual: %#+v", expectedPayload, p.Payload)
 	}
+}
+
+func TestRequestPacketLogger(t *testing.T) {
+	nopHandler := PacketHandlerFunc(func(w PacketWriter, req *Packet) {})
+
+	logger := logrus.StandardLogger()
+	h := WithDecorator(nopHandler, RequestPacketLogger(logger))
+
+	p := &Packet{Payload: []byte("\x01\x02\x03\x04"), UseCipher: true}
+	h.Handle(nil, p)
 }

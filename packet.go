@@ -3,6 +3,7 @@ package goseine
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"strings"
 )
@@ -16,6 +17,12 @@ type Packet struct {
 	UseCipher bool
 }
 
+type PacketID int
+
+func (p *Packet) PacketID() PacketID {
+	return PacketID(binary.LittleEndian.Uint16(p.Payload[:4]))
+}
+
 // 01 AB FF C3 のような見やすい16進数表記文字列にする
 // ログやデバッグのとき用
 func (p *Packet) Hex() string {
@@ -25,6 +32,10 @@ func (p *Packet) Hex() string {
 		ss[i] = hs[i*2 : i*2+2]
 	}
 	return strings.Join(ss, " ")
+}
+
+func (p *Packet) String() string {
+	return fmt.Sprintf("(ID=%d) %s", p.PacketID(), p.Hex())
 }
 
 type packetDecoder struct {
@@ -92,4 +103,41 @@ func (e *packetEncoder) Encode(src *Packet) error {
 		}
 	}
 	return nil
+}
+
+type PacketWriter interface {
+	Write(p *Packet) error
+}
+
+// http.Handler の真似
+type PacketHandler interface {
+	// ここでは error を返さない、エラーは log に記録するなり、concrete struct の中でよしなにやってほしい
+	Handle(response PacketWriter, request *Packet)
+}
+
+// http.HandlerFunc の真似
+type PacketHandlerFunc func(PacketWriter, *Packet)
+
+func (f PacketHandlerFunc) Handle(response PacketWriter, request *Packet) {
+	f(response, request)
+}
+
+// adapter pattern
+// https://medium.com/@matryer/writing-middleware-in-golang-and-how-go-makes-it-so-much-fun-4375c1246e81
+type PacketDecorator func(PacketHandler) PacketHandler
+
+func RequestPacketLogger(logger *logrus.Logger) PacketDecorator {
+	return func(h PacketHandler) PacketHandler {
+		return PacketHandlerFunc(func(w PacketWriter, req *Packet) {
+			logger.Println(req)
+			h.Handle(w, req)
+		})
+	}
+}
+
+func WithDecorator(h PacketHandler, decorators ...PacketDecorator) PacketHandler {
+	for _, decorator := range decorators {
+		h = decorator(h)
+	}
+	return h
 }

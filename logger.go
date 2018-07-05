@@ -1,8 +1,8 @@
 package goseine
 
 import (
-	"github.com/sirupsen/logrus"
 	"fmt"
+	"github.com/sirupsen/logrus"
 )
 
 type LogFormatter struct {
