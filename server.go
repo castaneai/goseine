@@ -5,12 +5,11 @@ import (
 	"net"
 )
 
-type ActualAddrResolver func() (*net.TCPAddr, error)
-
 type Server struct {
-	listenAddr     *net.TCPAddr
-	actualResolver ActualAddrResolver
-	log            *logrus.Logger
+	dialer     Dialer
+	listenAddr *net.TCPAddr
+	log        *logrus.Logger
+	proxy      *Proxy
 }
 
 func (s *Server) Serve() error {
@@ -38,36 +37,34 @@ func (s *Server) handleConn(c *net.TCPConn) error {
 
 	s.log.Infof("Handle new client: %s\n", c.RemoteAddr().String())
 
-	actual, err := s.actualResolver()
+	p, err := NewProxy(c, s.dialer)
 	if err != nil {
-		s.log.Errorln(err)
 		return err
 	}
-
-	p, err := NewProxy(c, c.RemoteAddr().(*net.TCPAddr), actual)
+	s.proxy = p
 	// f := NewPacketFilter()
 	// p.SetFilter(f)
 
-	return p.Start()
+	return s.proxy.Start()
 }
 
 type LoginServer struct {
 	server *Server
 }
 
-func NewLoginServer(listenAddr, actualAddr *net.TCPAddr) (*LoginServer, error) {
+func NewLoginServer(listenAddr *net.TCPAddr, dialer Dialer) (*LoginServer, error) {
 	log := NewLogger("LoginServer")
 	srv := &LoginServer{
 		server: &Server{
-			listenAddr:     listenAddr,
-			actualResolver: func() (*net.TCPAddr, error) { return actualAddr, nil },
-			log:            log,
+			dialer:     dialer,
+			listenAddr: listenAddr,
+			log:        log,
 		},
 	}
 	return srv, nil
 }
 
-func Start(listenAddr, actualLoginAddr *net.TCPAddr) error {
+func ListenAndServe(listenAddr, actualLoginAddr *net.TCPAddr) error {
 	s, err := NewLoginServer(listenAddr, actualLoginAddr)
 	if err != nil {
 		return err

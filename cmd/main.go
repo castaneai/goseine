@@ -1,10 +1,10 @@
 package main
 
 import (
-	"os"
-	"net"
 	"fmt"
 	"github.com/castaneai/goseine"
+	"net"
+	"os"
 )
 
 func main() {
@@ -18,5 +18,5 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	goseine.Start(addr, actual)
+	goseine.ListenAndServe(addr, actual)
 }

@@ -38,19 +38,19 @@ func (p *Packet) String() string {
 	return fmt.Sprintf("(ID=%d) %s", p.PacketID(), p.Hex())
 }
 
-type packetDecoder struct {
+type PacketReader struct {
 	r      io.Reader
 	cipher Cipher
 }
 
-func NewPacketDecoder(r io.Reader, cipher Cipher) *packetDecoder {
-	return &packetDecoder{r: r, cipher: cipher}
+func NewPacketReader(r io.Reader, cipher Cipher) *PacketReader {
+	return &PacketReader{r: r, cipher: cipher}
 }
 
-func (d *packetDecoder) Decode(dst *Packet) error {
+func (pr *PacketReader) Read(dst *Packet) error {
 	// header は先頭2byte が長さ, 次の2byteが 暗号化されているかどうかのflag
 	header := make([]byte, packetHeaderLen)
-	if _, err := io.ReadFull(d.r, header); err != nil {
+	if _, err := io.ReadFull(pr.r, header); err != nil {
 		return err
 	}
 	payloadLen := int(binary.LittleEndian.Uint16(header[:2])) - len(header)
@@ -58,12 +58,12 @@ func (d *packetDecoder) Decode(dst *Packet) error {
 
 	dst.UseCipher = useCipher
 	payload := make([]byte, payloadLen)
-	if _, err := io.ReadFull(d.r, payload); err != nil {
+	if _, err := io.ReadFull(pr.r, payload); err != nil {
 		return err
 	}
 	if useCipher {
 		decPayload := make([]byte, payloadLen)
-		d.cipher.Decrypt(decPayload, payload)
+		pr.cipher.Decrypt(decPayload, payload)
 		dst.Payload = decPayload
 	} else {
 		dst.Payload = payload
@@ -71,16 +71,16 @@ func (d *packetDecoder) Decode(dst *Packet) error {
 	return nil
 }
 
-type packetEncoder struct {
+type PacketWriter struct {
 	w      io.Writer
 	cipher Cipher
 }
 
-func NewPacketEncoder(w io.Writer, cipher Cipher) *packetEncoder {
-	return &packetEncoder{w: w, cipher: cipher}
+func NewPacketWriter(w io.Writer, cipher Cipher) *PacketWriter {
+	return &PacketWriter{w: w, cipher: cipher}
 }
 
-func (e *packetEncoder) Encode(src *Packet) error {
+func (pw *PacketWriter) Write(src *Packet) error {
 	header := make([]byte, packetHeaderLen)
 	binary.LittleEndian.PutUint16(header, uint16(len(src.Payload)+packetHeaderLen))
 	var useCipherUint16 uint16
@@ -88,25 +88,21 @@ func (e *packetEncoder) Encode(src *Packet) error {
 		useCipherUint16 = 1
 	}
 	binary.LittleEndian.PutUint16(header[2:], useCipherUint16)
-	if _, err := e.w.Write(header); err != nil {
+	if _, err := pw.w.Write(header); err != nil {
 		return err
 	}
 	if src.UseCipher {
 		encPayload := make([]byte, len(src.Payload))
-		e.cipher.Encrypt(encPayload, src.Payload)
-		if _, err := e.w.Write(encPayload); err != nil {
+		pw.cipher.Encrypt(encPayload, src.Payload)
+		if _, err := pw.w.Write(encPayload); err != nil {
 			return err
 		}
 	} else {
-		if _, err := e.w.Write(src.Payload); err != nil {
+		if _, err := pw.w.Write(src.Payload); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-type PacketWriter interface {
-	Write(p *Packet) error
 }
 
 // http.Handler の真似
