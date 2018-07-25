@@ -6,10 +6,10 @@ import (
 )
 
 type Server struct {
-	dialer     Dialer
+	cipher     Cipher
+	handler    PacketHandler
 	listenAddr *net.TCPAddr
 	log        *logrus.Logger
-	proxy      *Proxy
 }
 
 func (s *Server) Serve() error {
@@ -29,7 +29,7 @@ func (s *Server) Serve() error {
 	}
 }
 
-func (s *Server) handleConn(c *net.TCPConn) error {
+func (s *Server) handleConn(c *net.TCPConn) {
 	defer (func() {
 		c.Close()
 		s.log.Infof("Closed client: %s\n", c.RemoteAddr().String())
@@ -37,37 +37,27 @@ func (s *Server) handleConn(c *net.TCPConn) error {
 
 	s.log.Infof("Handle new client: %s\n", c.RemoteAddr().String())
 
-	p, err := NewProxy(c, s.dialer)
-	if err != nil {
-		return err
+	w := NewPacketWriter(c, s.cipher)
+	r := NewPacketReader(c, s.cipher)
+	for {
+		readPacket := &Packet{}
+		if err := r.Read(readPacket); err != nil {
+			s.log.Error(err)
+			return
+		}
+		s.handler.Handle(w, readPacket)
 	}
-	s.proxy = p
-	// f := NewPacketFilter()
-	// p.SetFilter(f)
-
-	return s.proxy.Start()
 }
 
-type LoginServer struct {
-	server *Server
+// http.Handler の真似
+type PacketHandler interface {
+	// ここでは error を返さない、エラーは log に記録するなり、concrete struct の中でよしなにやってほしい
+	Handle(response *PacketWriter, request *Packet)
 }
 
-func NewLoginServer(listenAddr *net.TCPAddr, dialer Dialer) (*LoginServer, error) {
-	log := NewLogger("LoginServer")
-	srv := &LoginServer{
-		server: &Server{
-			dialer:     dialer,
-			listenAddr: listenAddr,
-			log:        log,
-		},
-	}
-	return srv, nil
-}
+// http.HandlerFunc の真似
+type PacketHandlerFunc func(*PacketWriter, *Packet)
 
-func ListenAndServe(listenAddr, actualLoginAddr *net.TCPAddr) error {
-	s, err := NewLoginServer(listenAddr, actualLoginAddr)
-	if err != nil {
-		return err
-	}
-	return s.server.Serve()
+func (f PacketHandlerFunc) Handle(response *PacketWriter, request *Packet) {
+	f(response, request)
 }

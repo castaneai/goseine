@@ -2,18 +2,17 @@ package goseine
 
 import (
 	"bytes"
-	"github.com/sirupsen/logrus"
 	"reflect"
 	"testing"
 )
 
-func TestPacketEncoder(t *testing.T) {
+func TestPacketWriter(t *testing.T) {
 	actual := new(bytes.Buffer)
 	cipher := NewCurrentGoseineCipher()
-	enc := NewPacketEncoder(actual, cipher)
+	enc := NewPacketWriter(actual, cipher)
 
 	p := &Packet{Payload: []byte("\x01\x02\x03\x04"), UseCipher: true}
-	if err := enc.Encode(p); err != nil {
+	if err := enc.Write(p); err != nil {
 		t.Fatal(err)
 	}
 
@@ -28,25 +27,15 @@ func TestPacketDecoder(t *testing.T) {
 
 	r := bytes.NewReader(srcBytes)
 	cipher := NewCurrentGoseineCipher()
-	dec := NewPacketDecoder(r, cipher)
+	dec := NewPacketReader(r, cipher)
 
-	p := &Packet{UseCipher: true}
-	if err := dec.Decode(p); err != nil {
+	actualPacket := &Packet{UseCipher: true}
+	if err := dec.Read(actualPacket); err != nil {
 		t.Fatal(err)
 	}
 
 	expectedPayload := []byte{0x01, 0x02, 0x03, 0x04}
-	if !reflect.DeepEqual(expectedPayload, p.Payload) {
-		t.Fatalf("expected: %#+v, but actual: %#+v", expectedPayload, p.Payload)
+	if !reflect.DeepEqual(expectedPayload, actualPacket.Payload) {
+		t.Fatalf("expected: %#+v, but actual: %#+v", expectedPayload, actualPacket.Payload)
 	}
-}
-
-func TestRequestPacketLogger(t *testing.T) {
-	nopHandler := PacketHandlerFunc(func(w PacketWriter, req *Packet) {})
-
-	logger := logrus.StandardLogger()
-	h := WithDecorator(nopHandler, RequestPacketLogger(logger))
-
-	p := &Packet{Payload: []byte("\x01\x02\x03\x04"), UseCipher: true}
-	h.Handle(nil, p)
 }
