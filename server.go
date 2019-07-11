@@ -1,12 +1,14 @@
 package goseine
 
 import (
-	"github.com/sirupsen/logrus"
+	"crypto/cipher"
 	"net"
+
+	"github.com/sirupsen/logrus"
 )
 
 type Server struct {
-	cipher     Cipher
+	cipher     cipher.Stream
 	handler    PacketHandler
 	listenAddr *net.TCPAddr
 	log        *logrus.Logger

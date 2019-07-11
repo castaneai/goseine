@@ -8,7 +8,7 @@ import (
 
 func TestPacketWriter(t *testing.T) {
 	actual := new(bytes.Buffer)
-	cipher := NewCurrentGoseineCipher()
+	cipher := NewDefaultCipher()
 	enc := NewPacketWriter(actual, cipher)
 
 	p := &Packet{Payload: []byte("\x01\x02\x03\x04"), UseCipher: true}
@@ -22,11 +22,11 @@ func TestPacketWriter(t *testing.T) {
 	}
 }
 
-func TestPacketDecoder(t *testing.T) {
+func TestPacketReader(t *testing.T) {
 	srcBytes := []byte{0x08, 0x00, 0x01, 0x00, 0x70, 0x6f, 0x65, 0x65}
 
 	r := bytes.NewReader(srcBytes)
-	cipher := NewCurrentGoseineCipher()
+	cipher := NewDefaultCipher()
 	dec := NewPacketReader(r, cipher)
 
 	actualPacket := &Packet{UseCipher: true}

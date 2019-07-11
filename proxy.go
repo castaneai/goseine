@@ -1,10 +1,11 @@
 package goseine
 
 import (
-	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"net"
+
+	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
 type Proxy struct {
@@ -52,8 +53,8 @@ func (p *Proxy) Start() error {
 }
 
 func pipe(r io.Reader, w io.Writer) error {
-	pr := NewPacketReader(r, NewCurrentGoseineCipher())
-	pw := NewPacketWriter(w, NewCurrentGoseineCipher())
+	pr := NewPacketReader(r, NewDefaultCipher())
+	pw := NewPacketWriter(w, NewDefaultCipher())
 	for {
 		p := &Packet{}
 		if err := pr.Read(p); err != nil {

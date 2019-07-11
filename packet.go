@@ -1,6 +1,7 @@
 package goseine
 
 import (
+	"crypto/cipher"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -39,10 +40,10 @@ func (p *Packet) String() string {
 
 type PacketReader struct {
 	r      io.Reader
-	cipher Cipher
+	cipher cipher.Stream
 }
 
-func NewPacketReader(r io.Reader, cipher Cipher) *PacketReader {
+func NewPacketReader(r io.Reader, cipher cipher.Stream) *PacketReader {
 	return &PacketReader{r: r, cipher: cipher}
 }
 
@@ -56,26 +57,22 @@ func (pr *PacketReader) Read(dst *Packet) error {
 	useCipher := binary.LittleEndian.Uint16(header[2:4]) == 1
 
 	dst.UseCipher = useCipher
-	payload := make([]byte, payloadLen)
-	if _, err := io.ReadFull(pr.r, payload); err != nil {
+	dst.Payload = make([]byte, payloadLen)
+	if _, err := io.ReadFull(pr.r, dst.Payload); err != nil {
 		return err
 	}
 	if useCipher {
-		decPayload := make([]byte, payloadLen)
-		pr.cipher.Decrypt(decPayload, payload)
-		dst.Payload = decPayload
-	} else {
-		dst.Payload = payload
+		pr.cipher.XORKeyStream(dst.Payload, dst.Payload)
 	}
 	return nil
 }
 
 type PacketWriter struct {
 	w      io.Writer
-	cipher Cipher
+	cipher cipher.Stream
 }
 
-func NewPacketWriter(w io.Writer, cipher Cipher) *PacketWriter {
+func NewPacketWriter(w io.Writer, cipher cipher.Stream) *PacketWriter {
 	return &PacketWriter{w: w, cipher: cipher}
 }
 
@@ -92,7 +89,7 @@ func (pw *PacketWriter) Write(src *Packet) error {
 	}
 	if src.UseCipher {
 		encPayload := make([]byte, len(src.Payload))
-		pw.cipher.Encrypt(encPayload, src.Payload)
+		pw.cipher.XORKeyStream(encPayload, src.Payload)
 		if _, err := pw.w.Write(encPayload); err != nil {
 			return err
 		}
