@@ -8,22 +8,41 @@ import (
 )
 
 type Server struct {
-	cipher     cipher.Stream
-	handler    PacketHandler
-	listenAddr *net.TCPAddr
-	log        *logrus.Logger
+	opts    *serverOptions
+	handler PacketHandler
+	log     *logrus.Logger
 }
 
-func (s *Server) Serve() error {
-	lt, err := net.ListenTCP("tcp", s.listenAddr)
-	if err != nil {
-		return err
-	}
-	defer lt.Close()
+type serverOptions struct {
+	cipher cipher.Stream
+}
 
-	s.log.Infof("Listening on %s\n", s.listenAddr)
+var defaultServerOptions = serverOptions{
+	cipher: NewDefaultCipher(),
+}
+
+type ServerOption interface {
+	apply(*serverOptions)
+}
+
+type funcServerOption func(*serverOptions)
+
+func (fo funcServerOption) apply(o *serverOptions) {
+	fo(o)
+}
+
+func NewServer(opt ...ServerOption) *Server {
+	opts := defaultServerOptions
+	for _, o := range opt {
+		o.apply(&opts)
+	}
+	return &Server{}
+}
+
+func (s *Server) Serve(l net.Listener) error {
+	s.log.Infof("Listening on %s\n", l.Addr())
 	for {
-		conn, err := lt.AcceptTCP()
+		conn, err := l.Accept()
 		if err != nil {
 			return err
 		}
@@ -31,7 +50,7 @@ func (s *Server) Serve() error {
 	}
 }
 
-func (s *Server) handleConn(c *net.TCPConn) {
+func (s *Server) handleConn(c net.Conn) {
 	defer (func() {
 		c.Close()
 		s.log.Infof("Closed client: %s\n", c.RemoteAddr().String())
@@ -39,15 +58,15 @@ func (s *Server) handleConn(c *net.TCPConn) {
 
 	s.log.Infof("Handle new client: %s\n", c.RemoteAddr().String())
 
-	w := NewPacketWriter(c, s.cipher)
-	r := NewPacketReader(c, s.cipher)
+	w := NewPacketWriter(c, s.opts.cipher)
+	r := NewPacketReader(c, s.opts.cipher)
 	for {
-		readPacket := &Packet{}
-		if err := r.Read(readPacket); err != nil {
+		var p Packet
+		if err := r.Read(&p); err != nil {
 			s.log.Error(err)
 			return
 		}
-		s.handler.Handle(w, readPacket)
+		s.handler.Handle(w, &p)
 	}
 }
 

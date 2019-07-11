@@ -1,12 +1,10 @@
-Goseine
-========
-Goseine is a proxy server for leseine.
+# Goseine
+A proxy server for leseine.
 
-Usage
---------
+## Usage (Proxy)
 
 ```
 export GOSEINE_ACTUAL_LOGIN_SERVER=xxx.xxx.xxx.xxx:yyyyy
-go run cmd/main.go
+go run cmd/proxy.go
 ```
 
