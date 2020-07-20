@@ -1,23 +1,23 @@
 package goseine
 
-import "net"
+import (
+	"net"
+)
 
 type Dialer interface {
-	Dial() (*net.TCPConn, error)
+	Dial() (net.Conn, error)
 }
 
-type ActualAddrResolver interface {
-	Resolve() (*net.TCPAddr, error)
+type ProxyDialer struct {
+	loginServerAddr string
 }
 
-type ActualRemoteDialer struct {
-	resolver ActualAddrResolver
+func (d *ProxyDialer) Dial() (net.Conn, error) {
+	return net.Dial("tcp", d.loginServerAddr)
 }
 
-func (d *ActualRemoteDialer) Dial() (*net.TCPConn, error) {
-	addr, err := d.resolver.Resolve()
-	if err != nil {
-		return nil, err
+func NewProxyDialer(loginServerAddr string) *ProxyDialer {
+	return &ProxyDialer{
+		loginServerAddr: loginServerAddr,
 	}
-	return net.DialTCP("tcp", nil, addr)
 }
