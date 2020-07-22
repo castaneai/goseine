@@ -1,4 +1,4 @@
-package packet
+package packets
 
 import (
 	"encoding/binary"
@@ -11,15 +11,17 @@ const (
 	packetHeaderLen = 4
 )
 
+var byteOrder = binary.LittleEndian
+
 type Packet struct {
 	Payload   []byte
 	UseCipher bool
 }
 
-type PacketID int
+type PacketID uint32
 
 func (p *Packet) PacketID() PacketID {
-	return PacketID(binary.LittleEndian.Uint32(p.Payload[:4]))
+	return PacketID(byteOrder.Uint32(p.Payload[:4]))
 }
 
 // 01 AB FF C3 のような見やすい16進数表記文字列にする

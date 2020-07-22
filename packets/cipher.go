@@ -1,4 +1,4 @@
-package packet
+package packets
 
 var key = []byte("qmfaktnpgjs")
 

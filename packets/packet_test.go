@@ -1,4 +1,4 @@
-package packet
+package packets
 
 import (
 	"bytes"

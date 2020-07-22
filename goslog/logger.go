@@ -1,7 +1,8 @@
-package goseine
+package goslog
 
 import (
 	"fmt"
+
 	"github.com/sirupsen/logrus"
 )
 
