@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"bufio"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -112,7 +111,7 @@ func (p *Proxy) handleConn(lconn net.Conn) {
 					continue
 				}
 			}
-			p.logger.Debugf(">--- recv: [%d]\n%s", recvPacket.PacketID(), hex.Dump(recvPacket.Payload))
+			p.logger.Debugf(">--- recv: [%d] (len: %d)", recvPacket.PacketID(), len(recvPacket.Payload))
 
 			if err := packets.Write(lw, &recvPacket); err != nil {
 				p.logger.Errorf("failed to write recv packets: %+v", err)
@@ -148,7 +147,7 @@ func (p *Proxy) handleConn(lconn net.Conn) {
 				continue
 			}
 		}
-		p.logger.Debugf("<--- send: [%d]\n%s", sendPacket.PacketID(), hex.Dump(sendPacket.Payload))
+		p.logger.Debugf("<--- send: [%d] (len: %d)", sendPacket.PacketID(), len(sendPacket.Payload))
 
 		if err := packets.Write(rw, &sendPacket); err != nil {
 			p.logger.Errorf("failed to write send packets: %+v", err)
