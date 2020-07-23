@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bufio"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -11,6 +12,10 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/castaneai/goseine/packets"
+)
+
+const (
+	packetBufSize = 1024
 )
 
 type SendFilter interface {
@@ -88,9 +93,11 @@ func (p *Proxy) handleConn(lconn net.Conn) {
 
 	// remote -> local
 	go func() {
+		rr := bufio.NewReaderSize(rconn, packetBufSize)
+		lw := bufio.NewWriterSize(lconn, packetBufSize)
 		for {
 			var recvPacket packets.Packet
-			if err := packets.Read(rconn, &recvPacket); err != nil {
+			if err := packets.Read(rr, &recvPacket); err != nil {
 				if err == io.EOF {
 					p.logger.Infof("local disconnected (read EOF)")
 					return
@@ -107,7 +114,11 @@ func (p *Proxy) handleConn(lconn net.Conn) {
 			}
 			p.logger.Debugf(">--- recv: [%d]\n%s", recvPacket.PacketID(), hex.Dump(recvPacket.Payload))
 
-			if err := packets.Write(lconn, &recvPacket); err != nil {
+			if err := packets.Write(lw, &recvPacket); err != nil {
+				p.logger.Errorf("failed to write recv packets: %+v", err)
+				return
+			}
+			if err := lw.Flush(); err != nil {
 				p.logger.Errorf("failed to write recv packets: %+v", err)
 				return
 			}
@@ -115,9 +126,11 @@ func (p *Proxy) handleConn(lconn net.Conn) {
 	}()
 
 	// local -> remote
+	lr := bufio.NewReaderSize(lconn, packetBufSize)
+	rw := bufio.NewWriterSize(rconn, packetBufSize)
 	for {
 		var sendPacket packets.Packet
-		if err := packets.Read(lconn, &sendPacket); err != nil {
+		if err := packets.Read(lr, &sendPacket); err != nil {
 			if err == io.EOF {
 				p.logger.Infof("local disconnected (read EOF)")
 				return
@@ -137,7 +150,11 @@ func (p *Proxy) handleConn(lconn net.Conn) {
 		}
 		p.logger.Debugf("<--- send: [%d]\n%s", sendPacket.PacketID(), hex.Dump(sendPacket.Payload))
 
-		if err := packets.Write(rconn, &sendPacket); err != nil {
+		if err := packets.Write(rw, &sendPacket); err != nil {
+			p.logger.Errorf("failed to write send packets: %+v", err)
+			return
+		}
+		if err := rw.Flush(); err != nil {
 			p.logger.Errorf("failed to write send packets: %+v", err)
 			return
 		}
