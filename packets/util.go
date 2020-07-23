@@ -6,13 +6,26 @@ import (
 	"net"
 )
 
-func ReadAddr(b []byte) (string, error) {
-	if len(b) < 16+2 {
+func ReadIPAddr(b []byte) (string, error) {
+	if len(b) < 16 {
 		return "", fmt.Errorf("invalid binary length for addr struct (ip:port)")
 	}
-	ip := UnpadBytes(b, 16)
+	ip := UnpadBytes(b[:16])
+	return string(ip), nil
+}
+
+func ReadAddr(b []byte) (string, error) {
+	ip, err := ReadIPAddr(b[:16])
+	if err != nil {
+		return "", err
+	}
 	port := byteOrder.Uint16(b[16:])
 	return fmt.Sprintf("%s:%d", ip, port), nil
+}
+
+func WriteIPAddr(ip string) ([]byte, error) {
+	b := PadBytes([]byte(ip), 16)
+	return b, nil
 }
 
 func WriteAddr(addr string) ([]byte, error) {
@@ -39,13 +52,6 @@ func PadBytes(b []byte, size int) []byte {
 	return append(b, bytes.Repeat([]byte{0x00}, size-len(b))...)
 }
 
-func UnpadBytes(b []byte, size int) []byte {
-	if len(b) >= size {
-		return b[:size]
-	}
-	i := bytes.IndexByte(b, 0x00)
-	if i < 0 || i+1 > size {
-		return b[:size]
-	}
-	return b[:i+1]
+func UnpadBytes(b []byte) []byte {
+	return bytes.TrimRight(b, "\x00")
 }

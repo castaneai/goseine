@@ -6,17 +6,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type LogFormatter struct {
-	category string
-}
-
-func NewLogger(category string) *logrus.Logger {
+func NewLogger(prefix string) logrus.FieldLogger {
+	formatter := &logrus.TextFormatter{ForceColors: true}
 	logger := logrus.New()
-	logger.Formatter = &LogFormatter{category: category}
+	logger.SetLevel(logrus.InfoLevel)
+	logger.SetFormatter(formatter)
+	logger.AddHook(&prefixHook{prefix: prefix})
 	return logger
 }
 
-func (f *LogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-	return []byte(fmt.Sprintf("[%s][%s][%s]%s",
-		entry.Time.Format("2006/01/02 15:04:05.00000"), entry.Level, f.category, entry.Message)), nil
+type prefixHook struct {
+	prefix string
+}
+
+func (p *prefixHook) Levels() []logrus.Level {
+	return logrus.AllLevels
+}
+
+func (p *prefixHook) Fire(entry *logrus.Entry) error {
+	entry.Message = fmt.Sprintf("[%s] %s", p.prefix, entry.Message)
+	return nil
 }

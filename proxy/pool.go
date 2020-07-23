@@ -28,9 +28,9 @@ func (p *Pool) AssignChannelProxy(remoteAddr string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	proxy := NewProxy(remoteAddr)
+	proxy := NewProxy("CHANNSV", remoteAddr)
 	channel := NewChannelProxy(proxy)
 	p.channels[remoteAddr] = channel
-	go proxy.Start(lis)
+	go channel.Start(lis)
 	return lis.Addr().String(), nil
 }

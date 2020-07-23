@@ -2,9 +2,13 @@ package proxy
 
 import (
 	"encoding/hex"
+	"fmt"
 	"io"
-	"log"
 	"net"
+
+	"github.com/castaneai/goseine/goslog"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/castaneai/goseine/packets"
 )
@@ -18,14 +22,32 @@ type RecvFilter interface {
 }
 
 type Proxy struct {
+	name       string
+	logger     logrus.FieldLogger
 	lis        net.Listener
-	remoteAddr string
+	remoteAddr *net.TCPAddr
 	sendFilter SendFilter
 	recvFilter RecvFilter
 }
 
-func NewProxy(remoteAddr string) *Proxy {
-	return &Proxy{remoteAddr: remoteAddr}
+func NewProxy(name, remoteAddr string) *Proxy {
+	ra, err := net.ResolveTCPAddr("tcp4", remoteAddr)
+	if err != nil {
+		panic(fmt.Sprintf("failed to resolve tcp addr(%s): %+v", remoteAddr, err))
+	}
+	return &Proxy{
+		name:       name,
+		logger:     goslog.NewLogger(name),
+		remoteAddr: ra,
+	}
+}
+
+func (p *Proxy) ListenAddr() *net.TCPAddr {
+	return p.lis.Addr().(*net.TCPAddr)
+}
+
+func (p *Proxy) RemoteAddr() *net.TCPAddr {
+	return p.remoteAddr
 }
 
 func (p *Proxy) FilterSend(f SendFilter) {
@@ -38,11 +60,11 @@ func (p *Proxy) FilterReceive(f RecvFilter) {
 
 func (p *Proxy) Start(lis net.Listener) {
 	p.lis = lis
-	log.Printf("proxy (remote: %v) listening on %v...", p.remoteAddr, lis.Addr())
+	p.logger.Infof("proxy (remote: %s) listening on %s...", p.RemoteAddr(), p.ListenAddr())
 	for {
 		conn, err := lis.Accept()
 		if err != nil {
-			log.Printf("failed to accept conn: %+v", err)
+			p.logger.Errorf("failed to accept conn: %+v", err)
 			return
 		}
 		// TODO: cancel goroutine
@@ -55,14 +77,13 @@ func (p *Proxy) Stop() {
 }
 
 func (p *Proxy) handleConn(lconn net.Conn) {
-	log.Printf("new local connected")
-	rconn, err := net.Dial("tcp4", p.remoteAddr)
+	p.logger.Infof("new local connected")
+	rconn, err := net.Dial("tcp4", p.RemoteAddr().String())
 	if err != nil {
-		log.Printf("failed to connect to remote: %+v", err)
-
+		p.logger.Errorf("failed to connect to remote: %+v", err)
 		return
 	}
-	log.Printf("new remote connected")
+	p.logger.Infof("new remote connected")
 	defer func() { _ = rconn.Close() }()
 
 	// remote -> local
@@ -71,23 +92,23 @@ func (p *Proxy) handleConn(lconn net.Conn) {
 			var recvPacket packets.Packet
 			if err := packets.Read(rconn, &recvPacket); err != nil {
 				if err == io.EOF {
-					log.Printf("local disconnected (read EOF)")
+					p.logger.Infof("local disconnected (read EOF)")
 					return
 				}
-				log.Printf("failed to read recv packets: %+v", err)
+				p.logger.Errorf("failed to read recv packets: %+v", err)
 				return
 			}
 
-			log.Printf("recv: [%d] %s", recvPacket.PacketID(), hex.Dump(recvPacket.Payload))
 			if p.recvFilter != nil {
 				if err := p.recvFilter.HandleRecv(&recvPacket); err != nil {
-					log.Printf("filter returned error, drop recv packet: %+v", err)
+					p.logger.Warnf("filter returned error, drop recv packet: %+v", err)
 					continue
 				}
 			}
+			p.logger.Debugf(">--- recv: [%d]\n%s", recvPacket.PacketID(), hex.Dump(recvPacket.Payload))
 
 			if err := packets.Write(lconn, &recvPacket); err != nil {
-				log.Printf("failed to write recv packets: %+v", err)
+				p.logger.Errorf("failed to write recv packets: %+v", err)
 				return
 			}
 		}
@@ -98,24 +119,42 @@ func (p *Proxy) handleConn(lconn net.Conn) {
 		var sendPacket packets.Packet
 		if err := packets.Read(lconn, &sendPacket); err != nil {
 			if err == io.EOF {
-				log.Printf("local disconnected (read EOF)")
+				p.logger.Infof("local disconnected (read EOF)")
 				return
 			}
-			log.Printf("failed to read send packets: %+v", err)
+			p.logger.Errorf("failed to read send packets: %+v", err)
 			return
 		}
 
-		log.Printf("send: [%d] %s", sendPacket.PacketID(), hex.Dump(sendPacket.Payload))
+		if sendPacket.PacketID() == packets.PacketIDEnterServerRequest {
+			_ = p.replaceEnterServerRequest(&sendPacket)
+		}
 		if p.sendFilter != nil {
 			if err := p.sendFilter.HandleSend(&sendPacket); err != nil {
-				log.Printf("filter returned error, drop recv packet: %+v", err)
+				p.logger.Warnf("filter returned error, drop recv packet: %+v", err)
 				continue
 			}
 		}
+		p.logger.Debugf("<--- send: [%d]\n%s", sendPacket.PacketID(), hex.Dump(sendPacket.Payload))
 
 		if err := packets.Write(rconn, &sendPacket); err != nil {
-			log.Printf("failed to write send packets: %+v", err)
+			p.logger.Errorf("failed to write send packets: %+v", err)
 			return
 		}
 	}
+}
+
+func (p *Proxy) replaceEnterServerRequest(packet *packets.Packet) error {
+	beforeIP, err := packets.ReadIPAddr(packet.Payload[12:])
+	if err != nil {
+		return fmt.Errorf("failed to read IP from enter server request: %+v", err)
+	}
+	afterIP := p.RemoteAddr().IP.String()
+	afterIPBytes, err := packets.WriteIPAddr(afterIP)
+	if err != nil {
+		return fmt.Errorf("failed to write addr: %+v", err)
+	}
+	packets.ReplaceBytes(packet.Payload, 12, afterIPBytes)
+	p.logger.Debugf("replace enter server request IP: %s -> %s", beforeIP, afterIP)
+	return nil
 }
